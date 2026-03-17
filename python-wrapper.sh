@@ -1,1 +1,1 @@
-python ./script.py $@
+python ./nj67-client $@
