@@ -12,14 +12,15 @@ Usage: nj67-client.py <command> [<arguments>...]
 """
 
 import argparse
-import sys
-import requests
-import zipfile
-import shutil
-import tempfile
 import pickle
-from pathlib import Path
+import requests
+import shutil
+import sys
+import tempfile
+import zipfile
+
 from io import BytesIO
+from pathlib import Path
 
 
 def get_config_dir(create=True, dir_name="nj67client"):
@@ -29,7 +30,7 @@ def get_config_dir(create=True, dir_name="nj67client"):
         if create:
             c.mkdir(exist_ok=True)
         return c
-    # UNCOMMENT TO CAUSE HEADACHES ON WHERE CONFIG IS
+    # GETTING CONFIG DIR FROM MORE HIDDEN SPOTS, NOT RECOMMENDED FOR SMALL-SCALE USE
     # if (a := Path('.') / '.vscode') and a.exists():
     #     return _from_parent(a)
     # match os.name:
