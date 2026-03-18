@@ -17,14 +17,57 @@ import requests
 import zipfile
 import shutil
 import tempfile
+import pickle
 from pathlib import Path
 from io import BytesIO
+
+
+def get_config_dir(create=True, dir_name="nj67client"):
+    "Get path of config directory, creating if not exists"
+    def _from_parent(path: Path):
+        c = path / dir_name
+        if create:
+            c.mkdir(exist_ok=True)
+        return c
+    # UNCOMMENT TO CAUSE HEADACHES ON WHERE CONFIG IS
+    # if (a := Path('.') / '.vscode') and a.exists():
+    #     return _from_parent(a)
+    # match os.name:
+    #     case 'posix':
+    #         if (b := os.environ.get('XDG_CONFIG_DIR', '')) and Path(b).exists():
+    #             return _from_parent(Path(b))
+    #         elif ((a := os.environ.get('HOME', '')) or (a := Path.home())) and (b := (Path(a) / '.config')) and b.exists():
+    #             return _from_parent(b)
+    #         else:
+    #             return _from_parent(Path())
+    #     case 'nt':
+    #         return _from_parent(Path.home() / 'AppData' / 'Roaming')
+    #     case 'java':
+    #         print("...bro wtf why java are u kidding me jython don't even support python 3 man wth")
+    return _from_parent(Path())
 
 class Env:
     UPLOAD_PATH: Path = Path('ans_booklet')
     UPLOAD_URI: str = 'http://127.0.0.1:5000/upload'
     DOWNLOAD_URI: str = 'http://127.0.0.1:5000/download'
     DOWNLOAD_PATH: str | None = None
+    CONFIG_DIR = get_config_dir()
+    COOKIE_FILE = CONFIG_DIR / "cookies-pickled"
+
+class Cookie_env:
+    def __init__(self):
+        self.s = requests.Session()
+        if env.COOKIE_FILE.exists():
+            with open(env.COOKIE_FILE, 'rb') as f:
+                self.s.cookies.update(pickle.load(f))
+    def __enter__(self):
+        return self.s
+    def __exit__(self, type, value, traceback):
+        with open(env.COOKIE_FILE, 'wb') as f:
+            pickle.dump(self.s.cookies, f)
+    
+env = Env()
+cookie_env = Cookie_env()
 
 def init_parser():
     parser = argparse.ArgumentParser(description="NJ67 Client", add_help=False)
@@ -37,10 +80,11 @@ def init_parser():
     return parser
 
 def download(env: Env):
-    try:
-        r = requests.get(env.DOWNLOAD_URI, params={})
-    except requests.exceptions.ConnectionError:
-        sys.exit("Error with connection, check that you are connected to the internet.")
+    with cookie_env as sess:
+        try:
+            r = sess.get(env.DOWNLOAD_URI, params={})
+        except requests.exceptions.ConnectionError:
+            sys.exit("Error with connection, check that you are connected to the internet.")
     if r.status_code == 200:
         with zipfile.ZipFile(BytesIO(r.content), 'r') as zip_ref:
             zip_ref.extractall(path=env.DOWNLOAD_PATH)
@@ -53,10 +97,10 @@ def upload(env: Env):
         shutil.make_archive(temp_ans.name[:-4], 'zip', env.UPLOAD_PATH)
     except FileNotFoundError as e:
         sys.exit(f"No directory '{e.filename}' found")
-    r = requests.post(env.UPLOAD_URI, files={'file': ('ans_booklet.zip', temp_ans, 'application/zip')})
+    with cookie_env as sess:
+        r = sess.post(env.UPLOAD_URI, files={'file': ('ans_booklet.zip', temp_ans, 'application/zip')})
     print(r.text)
 
-env = Env()
 try:
     args = init_parser().parse_args()
 except SystemExit:
