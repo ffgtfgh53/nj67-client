@@ -9,6 +9,7 @@ Usage: nj67-client <command> [<arguments>...]
 
 <Arguments>
  -p, --path <path> : Specify the path in which to upload/download the file
+ -v, --verbose     : Verbose output (will print more)
 """
 
 import argparse
@@ -54,6 +55,7 @@ class Env:
     DOWNLOAD_PATH: str | None = None
     CONFIG_DIR = get_config_dir()
     COOKIE_FILE = CONFIG_DIR / "cookies-pickled"
+    VERBOSE = False
 
     def __init__(self, *, args: argparse.Namespace|None=None):
         if args is not None:
@@ -61,43 +63,51 @@ class Env:
                 self.DOWNLOAD_PATH = args.path or self.DOWNLOAD_PATH
             elif args.command in ('upload', 'u'):
                 self.UPLOAD_PATH = Path(args.path) if args.path else self.UPLOAD_PATH
-
-class Cookie_env:
-    def __init__(self):
-        self.s = requests.Session()
-        if env.COOKIE_FILE.exists():
-            with open(env.COOKIE_FILE, 'rb') as f:
-                self.s.cookies.update(pickle.load(f))
-    def __enter__(self):
-        return self.s
-    def __exit__(self, type, value, traceback):
-        with open(env.COOKIE_FILE, 'wb') as f:
-            pickle.dump(self.s.cookies, f)
+            self.VERBOSE = args.verbose
+            if self.VERBOSE: print("Verbose: Will print more")
 
 def init_parser():
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument('-p', '--path')
+    parent.add_argument('-v', '--verbose', action='store_true')
     parser = argparse.ArgumentParser(description="NJ67 Client", add_help=False)
     subparsers = parser.add_subparsers(dest='command')
     subparsers.add_parser('help', aliases=['h', '-h', '--help'])
-    download_parser = subparsers.add_parser('download', aliases=['d'])
-    download_parser.add_argument('-p', '--path')
-    upload_parser = subparsers.add_parser('upload', aliases=['u'])
-    upload_parser.add_argument('-p', '--path')
+    download_parser = subparsers.add_parser('download', aliases=['d'], parents=[parent])
+    upload_parser = subparsers.add_parser('upload', aliases=['u'], parents=[parent])
     return parser
 
 try:
     args = init_parser().parse_args()
 except SystemExit:
+    # When invalid argument given
     sys.exit(__doc__)
 env = Env(args=args)
-cookie_env = Cookie_env()
+
+class Cookie_env:
+    def __init__(self):
+        self.s = requests.Session()
+        if env.COOKIE_FILE.exists():
+            if env.VERBOSE: print(f"Found cookie file at {env.COOKIE_FILE.absolute()}")
+            with open(env.COOKIE_FILE, 'rb') as f:
+                self.s.cookies.update(pickle.load(f))
+        elif env.VERBOSE: print(f"Did not find cookie file at {env.COOKIE_FILE.absolute()}, creating new session")
+    def __enter__(self):
+        return self.s
+    def __exit__(self, type, value, traceback):
+        with open(env.COOKIE_FILE, 'wb') as f:
+            if env.VERBOSE: print(f"Saving cookies at {env.COOKIE_FILE.absolute()}")
+            pickle.dump(self.s.cookies, f)
 
 def download():
-    with cookie_env as sess:
+    with Cookie_env() as sess:
         try:
+            if env.VERBOSE: print(f"Connecting to {env.DOWNLOAD_URI}")
             r = sess.get(env.DOWNLOAD_URI, params={})
         except requests.exceptions.ConnectionError:
             sys.exit("Error with connection, check that you are connected to the internet.")
     if r.status_code == 200:
+        if env.VERBOSE: print(f"Got zip file, headers are \n{'\n'.join((f"\t{k}: {v}" for k, v in r.headers.items()))}")
         with zipfile.ZipFile(BytesIO(r.content), 'r') as zip_ref:
             zip_ref.extractall(path=env.DOWNLOAD_PATH)
     else:
@@ -106,12 +116,15 @@ def download():
 def upload():
     try:
         temp_ans = tempfile.NamedTemporaryFile(prefix=env.UPLOAD_PATH.stem, suffix='.zip', delete=False)
+        if env.VERBOSE: print(f"Making temp zip file at {temp_ans.name}")
         shutil.make_archive(temp_ans.name[:-4], 'zip', env.UPLOAD_PATH)
     except FileNotFoundError as e:
         sys.exit(f"No directory '{e.filename}' found")
-    with cookie_env as sess:
+    with Cookie_env() as sess:
+        if env.VERBOSE: print(f"Connecting to {env.UPLOAD_URI}")
         r = sess.post(env.UPLOAD_URI, files={'file': ('ans_booklet.zip', temp_ans, 'application/zip')})
-    print(r.text)
+        if env.VERBOSE: print(f"Success, response headers are: \n{'\n'.join((f"\t{k}: {v}" for k, v in r.headers.items()))}" + f"\n\tcontent: '{r.text}'")
+        else: print("response:", r.text)
 
 if args.command in ('help', 'h', None):
     print(__doc__)
