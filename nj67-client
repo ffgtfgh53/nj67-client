@@ -13,6 +13,7 @@ Usage: nj67-client <command> [<arguments>...]
 """
 
 import argparse
+import json
 import pickle
 import requests
 import shutil
@@ -51,6 +52,7 @@ class Env:
     UPLOAD_PATH: Path = Path('ans_booklet')
     UPLOAD_URI: str = 'http://127.0.0.1:5000/upload'
     DOWNLOAD_URI: str = 'http://127.0.0.1:5000/download'
+    VIEW_URI: str = 'http://127.0.0.1:5000/view'
     DOWNLOAD_PATH: str | None = None
     CONFIG_DIR = get_config_dir()
     COOKIE_FILE = CONFIG_DIR / "cookies-pickled"
@@ -74,6 +76,7 @@ def init_parser():
     subparsers.add_parser('help', aliases=['h', '-h', '--help'])
     download_parser = subparsers.add_parser('download', aliases=['d'], parents=[parent])
     upload_parser = subparsers.add_parser('upload', aliases=['u'], parents=[parent])
+    view_parser = subparsers.add_parser('view', aliases=['v'], parents=[parent])
     return parser
 
 try:
@@ -125,6 +128,15 @@ def upload():
         if env.VERBOSE: print(f"Success, response headers are: \n{'\n'.join((f"\t{k}: {v}" for k, v in r.headers.items()))}" + f"\n\tcontent: '{r.text}'")
         else: print("response:", r.text)
 
+def view():
+    with Cookie_env() as sess:
+        if env.VERBOSE: print(f"Connecting to {env.DOWNLOAD_URI}")
+        res = sess.get(env.VIEW_URI, params={'list': 'True'})
+    if res.status_code == 200:
+        file_list = json.loads(res.content) or ["[-No files found-]"]
+        print('\n\t'.join(["Uploaded files: "] + file_list))
+
+        
 if args.command in ('help', 'h', None):
     print(__doc__)
     sys.exit(0)
@@ -132,3 +144,5 @@ elif args.command in ('download', 'd'):
     download()
 elif args.command in ('upload', 'u'):
     upload()
+elif args.command in ('view', 'v'):
+    view()
