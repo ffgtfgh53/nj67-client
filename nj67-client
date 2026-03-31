@@ -110,6 +110,8 @@ class Cookie_env:
             pickle.dump(self.s.cookies, f)
 
 def download():
+    if env.VERBOSE and (up := get_update()):
+        print(f"New version {up[0]} available (current version {VERSION})")
     with Cookie_env() as sess:
         try:
             if env.VERBOSE: print(f"Connecting to {env.DOWNLOAD_URI}")
@@ -124,6 +126,8 @@ def download():
         sys.exit(f"Error occured when downloading file (got status code {r.status_code})")
 
 def upload():
+    if env.VERBOSE and (up := get_update()):
+        print(f"New version {up[0]} available (current version {VERSION})")
     try:
         temp_ans = tempfile.NamedTemporaryFile(prefix=env.UPLOAD_PATH.stem, suffix='.zip', delete=False)
         if env.VERBOSE: print(f"Making temp zip file at {temp_ans.name}")
@@ -137,6 +141,8 @@ def upload():
         else: print("response:", r.text)
 
 def view():
+    if env.VERBOSE and (up := get_update()):
+        print(f"New version {up[0]} available (current version {VERSION})")
     with Cookie_env() as sess:
         if env.VERBOSE: print(f"Connecting to {env.DOWNLOAD_URI}")
         res = sess.get(env.VIEW_URI, params={'list': 'True'})
@@ -189,7 +195,6 @@ def update():
         sys.exit("Something went wrong when downloading new version zip file")
     temp_zip = base_dir / new_version
     temp_zip.write_bytes(zip_r.content)
-    if env.VERBOSE: print("Creating backup")
     if env.VERBOSE: print("Extracting zip file to installation directory")
     with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
         for file in zip_ref.namelist():
@@ -198,6 +203,7 @@ def update():
                 to_delete = f
                 continue # Is directory containin the files
             new_file = Path('.') / f.relative_to(f.parents[-2])
+            if env.VERBOSE: print(f"Creating backup of {new_file}")
             rename_to_old(base_dir, new_file)
             if env.VERBOSE: print(f"Extracting {file}")
             zip_ref.extract(file, path=base_dir)
