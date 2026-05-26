@@ -1,27 +1,28 @@
 #!/usr/bin/env python
 """\
-Usage: nj67-client <command> [<arguments>...]
+usage: nj67-client <command> [<options>]
 
-<Commands>
-h   help          : Print this help message and exit
-    version       : Print the version of this program and exit
-d   download      : Download files
-u   upload        : Upload files
-v   view          : View uploaded files
-    update        : Update this program
+commands:
+  h   help         Print this help message and exit
+      version      Print the version of this program and exit
+  d   download     Download files
+  u   upload       Upload files
+  v   view         View uploaded files
+      update       Update this program
 
-<Arguments>
--h  --help        : Same as [help]
-    --version     : Same as [version]
--v  --verbose     : Verbose output i.e. will print more
--p  --path <path> : (upload/download) Specify the path of the file(s)
--c  --check       : (update) Just check if there is update, don't update
+options:
+  -h, --help       Show this help message and exit
+      --version    Same as [version]
+  -v  --verbose    Verbose output i.e. will print more
+
+More options shown when using -h/--help with a command
 """
 
 VERSION = "v0.0.2"
 
 import argparse
 import json
+import os
 import pickle
 import requests
 import shutil
@@ -70,20 +71,20 @@ class Env:
 
 def init_parser():
     verbose = argparse.ArgumentParser(add_help=False)
-    verbose.add_argument('-v', '--verbose', action='store_true')
+    verbose.add_argument('-v', '--verbose', action='store_true', help="verbose output (print more)")
     path = argparse.ArgumentParser(add_help=False)
-    path.add_argument('-p', '--path')
-    parser = argparse.ArgumentParser(description="NJ67 Client", add_help=False, exit_on_error=False)
+    path.add_argument('-p', '--path', help="path of the file/directory to download/upload")
+    parser = argparse.ArgumentParser(description="NJ67 Client", exit_on_error=False, add_help=False)
     parser.add_argument('-h', '--help', dest='command', action='store_const', const='help')
     parser.add_argument('--version', dest='command', action='store_const', const='version')
     command = parser.add_subparsers(dest='command')
     command.add_parser('help', aliases=['h'])
     command.add_parser('download', aliases=['d'], parents=[verbose, path])
     command.add_parser('upload', aliases=['u'], parents=[verbose, path])
-    command.add_parser('view', aliases=['v'], parents=[verbose, path])
-    command.add_parser('version', parents=[verbose])
+    command.add_parser('view', aliases=['v'], parents=[verbose])
+    command.add_parser('version')
     update_parser = command.add_parser('update', aliases=['upgrade'], parents=[verbose])
-    update_parser.add_argument('-c', '--check', action='store_true')
+    update_parser.add_argument('-c', '--check', action='store_true', help="only check if there is an update, do not update")
     return parser
 
 try:
@@ -119,7 +120,9 @@ def download():
         except requests.exceptions.ConnectionError:
             sys.exit("Error with connection, check that you are connected to the internet.")
     if r.status_code == 200:
-        if env.VERBOSE: print(f"Got zip file, headers are \n{'\n'.join((f"\t{k}: {v}" for k, v in r.headers.items()))}")
+        if env.VERBOSE: 
+            print("Got zip file, headers are:")
+            print('\n'.join(f'\t{k}: {v}' for k, v in r.headers.items()))
         with zipfile.ZipFile(BytesIO(r.content), 'r') as zip_ref:
             zip_ref.extractall(path=env.DOWNLOAD_PATH)
     else:
@@ -137,7 +140,10 @@ def upload():
     with Cookie_env() as sess:
         if env.VERBOSE: print(f"Connecting to {env.UPLOAD_URI}")
         r = sess.post(env.UPLOAD_URI, files={'file': ('ans_booklet.zip', temp_ans, 'application/zip')})
-        if env.VERBOSE: print(f"Success, response headers are: \n{'\n'.join((f"\t{k}: {v}" for k, v in r.headers.items()))}" + f"\n\tcontent: '{r.text}'")
+        if env.VERBOSE: 
+            print(f"Success, response headers are:")
+            print('\n'.join((f"\t{k}: {v}" for k, v in r.headers.items())))
+            print(f"\tcontent: '{r.text}'")
         else: print("response:", r.text)
 
 def view():

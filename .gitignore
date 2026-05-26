@@ -1,1 +1,4 @@
 nj67client/
+.venv
+ans_booklet/
+__pycache__/
