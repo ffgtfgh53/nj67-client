@@ -44,7 +44,13 @@ def get_config_dir(create=True, dir_name="nj67client"):
             c.mkdir(exist_ok=True)
         return c
     # deleted getting config from other places, check git history if need to recover
-    return _from_parent(Path())
+
+    configpath = Path(
+        os.environ.get('APPDATA') or
+        os.environ.get('XDG_CONFIG_HOME') or
+        Path(os.environ['HOME']) / '.config')
+
+    return _from_parent(configpath)
 
 class Env:
     UPLOAD_PATH: Path = Path('ans_booklet')
